@@ -1,0 +1,226 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>星空许愿</title><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+}
+#skyCanvas{
+  position:absolute;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+}
+.header{
+  position:relative;
+  z-index:9;
+  text-align:center;
+  padding-top:120px;
+}
+.title{
+  color:#fff;
+  font-size:22px;
+}
+.hint{
+  color:#aaa;
+  font-size:14px;
+  margin-top:8px;
+}
+.wish-area{
+  position:absolute;
+  bottom:60px;
+  left:20px;
+  right:20px;
+  display:flex;
+  background:rgba(255,255,255,0.1);
+  border-radius:12px;
+  padding:12px;
+  z-index:9;
+}
+#wishInput{
+  flex:1;
+  background:transparent;
+  border:none;
+  outline:none;
+  color:#fff;
+  font-size:16px;
+}
+#flyBtn{
+  width:80px;
+  height:36px;
+  border:none;
+  border-radius:6px;
+  background:#fff;
+  color:#000;
+  font-size:14px;
+}
+</style></head><body><canvas id="skyCanvas"></canvas><div class="header"><div class="title">星空许愿</div><div class="hint">点击夜空，爆发流星雨</div></div><div class="wish-area"><input id="wishInput" placeholder="写下你的愿望..."><button id="flyBtn">放飞</button></div><script>
+const canvas = document.getElementById('skyCanvas');
+const ctx = canvas.getContext('2d');
+const wishInput = document.getElementById('wishInput');
+const flyBtn = document.getElementById('flyBtn');
+
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  initStars();
+}
+
+let stars = [];
+let meteors = [];
+let wishTexts = [];
+
+function initStars(){
+  stars = [];
+  for(let i=0;i<800;i++){
+    stars.push({
+      x:Math.random() * canvas.width,
+      y:Math.random() * canvas.height,
+      r:Math.random() * 1.3 + 0.2,
+      baseAlpha:Math.random() * 0.7 + 0.3,
+      speed:Math.random() * 0.02 + 0.005,
+      dir:Math.random() > 0.5 ? 1 : -1
+    })
+  }
+}
+
+// 右上 → 左下：起点在屏幕右上区域
+function createMeteor(){
+  meteors.push({
+    x: Math.random() * canvas.width * 0.4 + canvas.width * 0.6, // 靠右
+    y: Math.random() * canvas.height * 0.5 - canvas.height * 0.2, // 靠上
+    length: Math.random() * 220 + 180,
+    speed: Math.random() * 3 + 6,
+    angle: Math.PI * 0.75, // 正确角度：右上往左下飞
+    life: 1,
+    decay: Math.random() * 0.006 + 0.003,
+    headSize: Math.random() * 1.8 + 1.4,
+    tail: []
+  })
+}
+
+canvas.addEventListener('click',()=>{
+  for(let i=0;i<8;i++){
+    setTimeout(createMeteor, i * 80);
+  }
+})
+
+flyBtn.addEventListener('click',()=>{
+  const text = wishInput.value.trim();
+  if(!text){
+    alert("请输入愿望");
+    return;
+  }
+  wishTexts.push({
+    text: text,
+    x: 50,
+    y: canvas.height - 80,
+    speedX: 3.2,
+    speedY: -3.2,
+    alpha:1
+  })
+  wishInput.value = "";
+})
+
+// 保持流星数量不变
+setInterval(()=>{
+  createMeteor();
+  createMeteor();
+  if(Math.random() > 0.4) createMeteor();
+}, 260);
+
+setInterval(()=>{
+  for(let i=0;i<6;i++){
+    setTimeout(createMeteor, i * 100);
+  }
+}, 1800);
+
+function drawLoop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // 星星
+  stars.forEach(s=>{
+    s.baseAlpha += s.speed * s.dir;
+    if(s.baseAlpha >= 1){ s.baseAlpha = 1; s.dir = -1; }
+    if(s.baseAlpha <= 0.2){ s.baseAlpha = 0.2; s.dir = 1; }
+
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(255,255,255,${s.baseAlpha})`;
+    ctx.fill();
+  })
+
+  // 流星
+  for(let i = meteors.length - 1; i >= 0; i--){
+    const m = meteors[i];
+
+    m.tail.push({ x: m.x, y: m.y });
+    if(m.tail.length > 36) m.tail.shift();
+
+    m.x += Math.cos(m.angle) * m.speed;
+    m.y += Math.sin(m.angle) * m.speed;
+    m.life -= m.decay;
+
+    // 白色稳定头部，不闪烁
+    const headAlpha = m.life;
+
+    // 白色长拖尾
+    for(let t = 0; t < m.tail.length - 1; t++){
+      const p1 = m.tail[t];
+      const p2 = m.tail[t + 1];
+      const alpha = (t / m.tail.length) * 0.7 * m.life;
+
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.lineWidth = (t / m.tail.length) * 2.4 + 0.4;
+      ctx.stroke();
+    }
+
+    // 白色头部光晕
+    const gradient = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.headSize * 5);
+    gradient.addColorStop(0, `rgba(255,255,255,${headAlpha})`);
+    gradient.addColorStop(0.4, `rgba(255,255,255,${headAlpha * 0.45})`);
+    gradient.addColorStop(1, `rgba(255,255,255,0)`);
+
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.headSize * 5, 0, 2 * Math.PI);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // 白色核心亮点
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.headSize, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(255,255,255,${headAlpha})`;
+    ctx.fill();
+
+    if(m.life <= 0 || m.x < -300 || m.y > canvas.height + 300){
+      meteors.splice(i,1);
+    }
+  }
+
+  // 愿望文字
+  for(let i = wishTexts.length - 1; i >= 0; i--){
+    const t = wishTexts[i];
+    ctx.fillStyle = `rgba(255,255,255,${t.alpha})`;
+    ctx.font = "14px sans-serif";
+    ctx.fillText(t.text, t.x, t.y);
+    t.x += t.speedX;
+    t.y += t.speedY;
+    t.alpha -= 0.008;
+    if(t.alpha <= 0){
+      wishTexts.splice(i,1);
+    }
+  }
+
+  requestAnimationFrame(drawLoop);
+}
+
+window.onload = function(){
+  resizeCanvas();
+  drawLoop();
+}
+</script></body></html>
